@@ -12,7 +12,7 @@ const io = new Server(server, {
   }
 });
 
-const MONGO_URL = 'mongodb://localhost:27017'; // Update if using cloud MongoDB
+const MONGO_URL = process.env.MONGO_URL || 'mongodb://localhost:27017';
 const DB_NAME = 'collab_code';
 const COLLECTION = 'documents';
 
@@ -30,6 +30,8 @@ MongoClient.connect(MONGO_URL, { useUnifiedTopology: true })
     );
   })
   .catch(console.error);
+
+app.get('/', (req, res) => res.send('OK'));
 
 io.on('connection', (socket) => {
   io.emit('user-count', io.engine.clientsCount);
