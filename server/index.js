@@ -33,17 +33,46 @@ MongoClient.connect(MONGO_URL, { useUnifiedTopology: true })
 
 app.get('/', (req, res) => res.send('OK'));
 
+// Optional health route that checks DB connectivity if available
+app.get('/healthz', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(200).send('OK (DB not ready)');
+    }
+    await db.command({ ping: 1 });
+    res.status(200).send('OK');
+  } catch (e) {
+    console.error('Health check failed:', e);
+    res.status(500).send('DB unreachable');
+  }
+});
+
 io.on('connection', (socket) => {
   io.emit('user-count', io.engine.clientsCount);
   console.log('A user connected:', socket.id);
-  collection.findOne({ _id: documentId }).then(doc => {
-    console.log('Sending init to', socket.id, doc ? doc.content : '');
-    socket.emit('init', doc ? doc.content : '');
-  });
+  if (!collection) {
+    console.warn('Mongo collection not ready; sending empty init');
+    socket.emit('init', '');
+  } else {
+    collection
+      .findOne({ _id: documentId })
+      .then((doc) => {
+        console.log('Sending init to', socket.id, doc ? doc.content : '');
+        socket.emit('init', doc ? doc.content : '');
+      })
+      .catch((err) => {
+        console.error('Error fetching initial document:', err);
+        socket.emit('init', '');
+      });
+  }
 
   socket.on('code-change', (newContent) => {
-    console.log('Received code-change from', socket.id, newContent);
-    collection.updateOne({ _id: documentId }, { $set: { content: newContent } });
+    console.log('Received code-change from', socket.id);
+    if (collection) {
+      collection
+        .updateOne({ _id: documentId }, { $set: { content: newContent } })
+        .catch((err) => console.error('Error updating document:', err));
+    }
     socket.broadcast.emit('code-change', newContent);
   });
 
